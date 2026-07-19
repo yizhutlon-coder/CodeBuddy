@@ -110,7 +110,8 @@ legend { margin-bottom: 9px; color: #c4bed0; font-size: 12px; font-weight: 700; 
 .choice input:checked + span { border-color: var(--violet); background: #2b2547; color: #eeeaff; }
 .modal-actions { display: flex; justify-content: flex-end; gap: 9px; margin-top: 22px; }
 
-.overlay-body { overflow: hidden; background: transparent !important; user-select: none; }
+.overlay-html, .overlay-html body { background: transparent !important; }
+.overlay-body { overflow: hidden; user-select: none; }
 .overlay-root { position: fixed; inset: 0; pointer-events: none; }
 .creature { position: absolute; width: 154px; min-height: 142px; padding: 0; background: transparent; pointer-events: auto; touch-action: none; filter: drop-shadow(0 12px 12px #0006); }
 .creature-visual { display: grid; place-items: end center; width: 138px; height: 102px; margin: 0 auto; }

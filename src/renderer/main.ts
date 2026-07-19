@@ -216,6 +216,7 @@ const bindControlEvents = (): void => {
 const fallbackCreature = (status: SessionStatus): string => `<div class="blob ${status}"><span class="eye left"></span><span class="eye right"></span><span class="mouth"></span></div>`;
 
 const renderOverlay = (): void => {
+  document.documentElement.classList.add("overlay-html");
   document.body.classList.add("overlay-body");
   appRoot.className = "overlay-root";
   const visibleSessions = snapshot.sessions.filter(
