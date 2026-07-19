@@ -1,0 +1,9 @@
+node_modules/
+.pnpm-store/
+dist/
+dist-electron/
+*.log
+.vite/
+.DS_Store
+.agents/
+.codex/

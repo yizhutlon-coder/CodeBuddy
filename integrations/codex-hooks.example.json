@@ -1,0 +1,55 @@
+{
+  "description": "Creature Companion lifecycle bridge.",
+  "hooks": {
+    "SessionStart": [
+    {
+      "hooks": [
+        {
+          "type": "command",
+          "command": "powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\\\ElectronApp\\\\scripts\\\\companion-hook.ps1\" -Provider codex"
+        }
+      ]
+    }
+    ],
+    "PreToolUse": [
+    {
+      "hooks": [
+        {
+          "type": "command",
+          "command": "powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\\\ElectronApp\\\\scripts\\\\companion-hook.ps1\" -Provider codex"
+        }
+      ]
+    }
+    ],
+    "PermissionRequest": [
+    {
+      "hooks": [
+        {
+          "type": "command",
+          "command": "powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\\\ElectronApp\\\\scripts\\\\companion-hook.ps1\" -Provider codex"
+        }
+      ]
+    }
+    ],
+    "PostToolUse": [
+    {
+      "hooks": [
+        {
+          "type": "command",
+          "command": "powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\\\ElectronApp\\\\scripts\\\\companion-hook.ps1\" -Provider codex"
+        }
+      ]
+    }
+    ],
+    "Stop": [
+    {
+      "hooks": [
+        {
+          "type": "command",
+          "command": "powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\\\ElectronApp\\\\scripts\\\\companion-hook.ps1\" -Provider codex"
+        }
+      ]
+    }
+    ]
+  }
+}
