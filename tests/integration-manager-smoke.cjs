@@ -32,6 +32,8 @@ try {
   assert.match(installerScript, /Invoke-WebRequest/);
   assert.doesNotMatch(installerScript, /Invoke-RestMethod/, "octet-stream installers must be downloaded as a file, not cast to text");
   assert.match(reviewScript, /\/hooks/);
+  assert.match(reviewScript, /CODEX_HOME/);
+  assert.match(reviewScript, /Hook file:/);
   assert.doesNotMatch(reviewScript, /bypass-hook-trust/, "guided onboarding must preserve Codex's explicit trust review");
   assert.equal(manager.install("claude").ok, true);
   const firstClaude = readFileSync(claudePath, "utf8");
@@ -57,6 +59,15 @@ try {
     assert.equal(commands.filter((command) => command.includes("companion-hook.ps1")).length, 1, `${event} should have one companion hook`);
   }
   assert.equal(readFileSync(codexPath, "utf8"), firstCodex, "reinstall should be content-idempotent");
+
+  codex.description = "User lifecycle hooks.";
+  writeFileSync(codexPath, JSON.stringify(codex, null, 2));
+  assert.equal(manager.install("codex").ok, true);
+  assert.equal(
+    JSON.parse(readFileSync(codexPath, "utf8")).description,
+    "Creature Companion lifecycle hooks.",
+    "the old generic label should be upgraded so Codex identifies the hook source",
+  );
   const verifiedCodex = manager.getState({ codex: 1234 }).providers.find((provider) => provider.provider === "codex");
   assert.equal(verifiedCodex.verified, true);
   assert.equal(verifiedCodex.lastEventAt, 1234);

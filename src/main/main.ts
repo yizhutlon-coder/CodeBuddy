@@ -227,11 +227,14 @@ const registerIpc = (): void => {
     const executable = integrationManager.findExecutable("codex");
     if (!executable) return { ok: false, message: "Install the standalone Codex CLI first.", state: onboardingState() };
     try {
+      const repair = integrationManager.install("codex", store.providerActivity);
+      broadcastOnboarding();
+      if (!repair.ok) return repair;
       clipboard.writeText("/hooks");
       onboardingLauncher.launchCodexHookReview(executable);
       return {
         ok: true,
-        message: "Codex CLI is opening. Type or paste /hooks, then trust the Creature Companion commands.",
+        message: "Codex CLI is opening with Creature Companion's hook file. Type or paste /hooks, then trust its commands.",
         state: onboardingState(),
       };
     } catch (error) {
@@ -300,7 +303,7 @@ app.whenReady().then(async () => {
   });
   integrationManager = new IntegrationManager(homedir(), app.getAppPath());
   providerLauncher = new ProviderLauncher(integrationManager, app.getAppPath());
-  onboardingLauncher = new OnboardingLauncher(app.getAppPath());
+  onboardingLauncher = new OnboardingLauncher(app.getAppPath(), homedir());
   eventServer = await startEventServer(store.settings.bridgePort, store.settings.bridgeToken, (event) => {
     const session = registry.ingest(event);
     if (event.provider === "codex" || event.provider === "claude") {

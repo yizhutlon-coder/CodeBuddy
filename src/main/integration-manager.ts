@@ -204,7 +204,13 @@ export class IntegrationManager {
     const hooks = isObject(config.hooks) ? config.hooks : {};
     const command = this.hookCommand("codex");
     for (const event of hookEvents.codex) this.addHook(hooks, event, command);
-    config.description = typeof config.description === "string" ? config.description : "User lifecycle hooks.";
+    if (
+      typeof config.description !== "string" ||
+      config.description.trim() === "" ||
+      config.description === "User lifecycle hooks."
+    ) {
+      config.description = "Creature Companion lifecycle hooks.";
+    }
     config.hooks = hooks;
     const backupPath = this.writeJsonWithBackup(this.codexConfigPath, config);
     return {

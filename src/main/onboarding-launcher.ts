@@ -3,7 +3,10 @@ import { join } from "node:path";
 import { launchVisiblePowerShell } from "./visible-powershell";
 
 export class OnboardingLauncher {
-  constructor(private readonly appPath: string) {}
+  constructor(
+    private readonly appPath: string,
+    private readonly homeDir: string,
+  ) {}
 
   launchCodexInstaller(): number {
     return this.launchScript("install-codex-cli.ps1", {});
@@ -12,6 +15,7 @@ export class OnboardingLauncher {
   launchCodexHookReview(codexExecutable: string): number {
     return this.launchScript("review-codex-hooks.ps1", {
       CREATURE_COMPANION_CODEX_EXE: codexExecutable,
+      CODEX_HOME: join(this.homeDir, ".codex"),
     });
   }
 

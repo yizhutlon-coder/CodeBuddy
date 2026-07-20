@@ -6,7 +6,18 @@ try {
   if ([string]::IsNullOrWhiteSpace($codexExecutable)) {
     throw 'Creature Companion could not locate the standalone Codex CLI.'
   }
+  if ([string]::IsNullOrWhiteSpace($env:CODEX_HOME)) {
+    throw 'Creature Companion could not determine the Codex configuration directory.'
+  }
+  $hooksPath = Join-Path $env:CODEX_HOME 'hooks.json'
+  if (-not (Test-Path -LiteralPath $hooksPath -PathType Leaf)) {
+    throw "Creature Companion's Codex hook file was not found at $hooksPath"
+  }
   Write-Host 'Creature Companion: final Codex connection step' -ForegroundColor Cyan
+  Write-Host ''
+  Write-Host 'Hook file: ' -NoNewline
+  Write-Host $hooksPath -ForegroundColor Green
+  Write-Host 'Codex is being opened with this exact configuration directory.'
   Write-Host ''
   Write-Host 'When Codex opens, type ' -NoNewline
   Write-Host '/hooks' -ForegroundColor Yellow
