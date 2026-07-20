@@ -35,6 +35,7 @@ try {
       provider = 'claude'
       event = 'statusline'
       sessionId = [string]$raw.session_id
+      launchId = if (-not [string]::IsNullOrWhiteSpace($env:CREATURE_COMPANION_LAUNCH_ID)) { $env:CREATURE_COMPANION_LAUNCH_ID } else { $null }
       title = if ($null -ne $raw.session_name) { [string]$raw.session_name } else { $null }
       cwd = [string]$raw.cwd
       telemetry = @{

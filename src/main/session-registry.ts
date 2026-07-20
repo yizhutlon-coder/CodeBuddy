@@ -81,6 +81,7 @@ export class SessionRegistry {
       title: input.title.trim() || "Untitled session",
       status: "idle",
       statusMessage: "Ready to begin",
+      cwd: input.cwd?.trim() || undefined,
       createdAt: now,
       updatedAt: now,
       lastEventAt: now,
@@ -124,6 +125,21 @@ export class SessionRegistry {
     const stableId = `${event.provider}:${sessionId}`;
     const now = Date.now();
     let session = this.sessions.find((candidate) => candidate.id === stableId);
+    const placeholder = event.launchId
+      ? this.sessions.find((candidate) => candidate.id === event.launchId && candidate.provider === event.provider)
+      : undefined;
+
+    if (!session && placeholder) {
+      placeholder.id = stableId;
+      placeholder.status = "starting";
+      placeholder.statusMessage = "Session connected";
+      session = placeholder;
+    } else if (session && placeholder && session !== placeholder) {
+      session.profile ??= placeholder.profile;
+      session.assets = { ...placeholder.assets, ...session.assets };
+      session.position ??= placeholder.position;
+      this.sessions = this.sessions.filter((candidate) => candidate !== placeholder);
+    }
     if (!session) {
       session = {
         id: stableId,

@@ -43,6 +43,7 @@ try {
     provider = $Provider
     event = $resolvedEvent
     sessionId = $sessionId
+    launchId = if (-not [string]::IsNullOrWhiteSpace($env:CREATURE_COMPANION_LAUNCH_ID)) { $env:CREATURE_COMPANION_LAUNCH_ID } else { $null }
     title = if ($null -ne $raw.session_title) { [string]$raw.session_title } else { $null }
     cwd = if ($null -ne $raw.cwd) { [string]$raw.cwd } else { $null }
     raw = $raw

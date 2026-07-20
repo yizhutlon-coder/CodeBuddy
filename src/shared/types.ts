@@ -62,6 +62,37 @@ export interface CompanionSettings {
   bridgeToken: string;
 }
 
+export type ConnectableProvider = "claude" | "codex";
+
+export interface ProviderSetupStatus {
+  provider: ConnectableProvider;
+  displayName: string;
+  installed: boolean;
+  executablePath?: string;
+  configPath: string;
+  configured: boolean;
+  telemetryConfigured: boolean;
+  requiresTrust: boolean;
+  warning?: string;
+}
+
+export interface OnboardingState {
+  providers: ProviderSetupStatus[];
+}
+
+export interface IntegrationResult {
+  ok: boolean;
+  message: string;
+  backupPath?: string;
+  state: OnboardingState;
+}
+
+export interface LaunchSessionResult {
+  launched: boolean;
+  session: CreatureSession;
+  error?: string;
+}
+
 export interface BridgeInfo {
   url: string;
   token: string;
@@ -78,6 +109,7 @@ export interface CreateSessionInput {
   provider: Provider;
   title: string;
   profile?: SessionProfile;
+  cwd?: string;
 }
 
 export interface UpdateSessionInput {
@@ -93,6 +125,7 @@ export interface IncomingEvent {
   provider: Provider;
   event?: string;
   sessionId?: string;
+  launchId?: string;
   title?: string;
   cwd?: string;
   status?: SessionStatus;
@@ -103,8 +136,12 @@ export interface IncomingEvent {
 
 export interface CompanionApi {
   getSnapshot(): Promise<AppSnapshot>;
+  getOnboarding(): Promise<OnboardingState>;
   onSnapshot(callback: (snapshot: AppSnapshot) => void): () => void;
   createSession(input: CreateSessionInput): Promise<CreatureSession>;
+  launchSession(input: CreateSessionInput): Promise<LaunchSessionResult>;
+  installIntegration(provider: ConnectableProvider): Promise<IntegrationResult>;
+  chooseDirectory(): Promise<string | null>;
   updateSession(input: UpdateSessionInput): Promise<void>;
   removeSession(id: string): Promise<void>;
   chooseAsset(id: string, status: SessionStatus): Promise<string | null>;

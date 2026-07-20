@@ -1,7 +1,9 @@
 import type {
   AppSnapshot,
+  ConnectableProvider,
   CreateSessionInput,
   CreatureSession,
+  OnboardingState,
   Provider,
   SessionProfile,
   SessionStatus,
@@ -15,7 +17,9 @@ const query = new URLSearchParams(window.location.search);
 const surface = query.get("surface") === "overlay" ? "overlay" : "control";
 const displayId = query.get("displayId") ?? undefined;
 let snapshot: AppSnapshot;
+let onboarding: OnboardingState;
 let quizOpen = false;
+let quizProvider: Provider = "codex";
 
 const statuses: SessionStatus[] = ["starting", "working", "needs_input", "ready", "blocked", "idle"];
 const statusLabels: Record<SessionStatus, string> = {
@@ -32,6 +36,31 @@ const providerLabels: Record<Provider, string> = {
   codex: "Codex",
   chatgpt: "ChatGPT (experimental)",
   manual: "Manual",
+};
+
+const setupHtml = (): string => {
+  const cards = onboarding.providers
+    .map((setup) => {
+      const ready = setup.installed && setup.configured;
+      const status = ready ? "Ready" : setup.installed ? "Setup needed" : "CLI not found";
+      return `<article class="provider-setup-card ${ready ? "ready" : "needs-setup"}">
+        <div class="provider-setup-heading"><div><span class="provider ${setup.provider}">${escapeHtml(setup.displayName)}</span><h3>${status}</h3></div><span class="setup-state ${ready ? "connected" : "pending"}">${ready ? "Connected" : "Not connected"}</span></div>
+        <p>${setup.installed ? `Found at <code>${escapeHtml(setup.executablePath ?? "")}</code>` : `Install ${escapeHtml(setup.displayName)} and restart Creature Companion so it appears on PATH.`}</p>
+        <p class="config-path">Configuration: ${escapeHtml(setup.configPath)}</p>
+        ${setup.warning ? `<p class="setup-warning">${escapeHtml(setup.warning)}</p>` : ""}
+        ${setup.configured && setup.requiresTrust ? `<p class="trust-note">On first use, approve or trust the local Creature Companion hook commands in ${escapeHtml(setup.displayName)}.</p>` : ""}
+        <div class="setup-actions">
+          <button class="subtle install-provider" data-provider="${setup.provider}">${setup.configured ? "Repair setup" : "Set up automatically"}</button>
+          <button class="primary launch-provider" data-provider="${setup.provider}" ${ready ? "" : "disabled"}>Launch a session</button>
+        </div>
+      </article>`;
+    })
+    .join("");
+  const readyCount = onboarding.providers.filter((provider) => provider.installed && provider.configured).length;
+  return `<section class="setup-panel">
+    <div class="setup-intro"><div><span class="eyebrow">Quick setup</span><h2>Connect your coding agents</h2><p>Creature Companion can add its local hooks without replacing your existing configuration. A timestamped backup is made before every change.</p></div><strong>${readyCount} / ${onboarding.providers.length} ready</strong></div>
+    <div class="setup-grid">${cards}</div>
+  </section>`;
 };
 
 const escapeHtml = (value: string): string =>
@@ -114,7 +143,8 @@ const quizHtml = (): string => `<div class="modal-backdrop" id="quiz-modal">
   <form class="quiz" id="quiz-form">
     <div class="quiz-heading"><div><span class="eyebrow">Hatch a companion</span><h2>What are we doing today?</h2></div><button type="button" class="icon-button close-quiz">×</button></div>
     <label>Session name<input name="title" required placeholder="Leyline · inventory refactor" /></label>
-    <label>Provider<select name="provider"><option value="codex">Codex</option><option value="claude">Claude Code</option><option value="chatgpt">ChatGPT (experimental)</option><option value="manual">Manual / demo</option></select></label>
+    <label>Provider<select name="provider"><option value="codex" ${quizProvider === "codex" ? "selected" : ""}>Codex</option><option value="claude" ${quizProvider === "claude" ? "selected" : ""}>Claude Code</option><option value="chatgpt" ${quizProvider === "chatgpt" ? "selected" : ""}>ChatGPT (experimental)</option><option value="manual" ${quizProvider === "manual" ? "selected" : ""}>Manual / demo</option></select></label>
+    <label>Working folder<div class="folder-row"><input name="cwd" placeholder="Choose a project folder (optional)" /><button type="button" class="subtle" id="choose-directory">Browse</button></div></label>
     <fieldset><legend>What should the assistant be?</legend><div class="choice-grid">
       ${["Primary implementer", "Design partner", "Researcher", "Critic and reviewer", "Teacher"].map((choice, index) => `<label class="choice"><input type="radio" name="assistantRole" value="${choice}" ${index === 0 ? "checked" : ""}/><span>${choice}</span></label>`).join("")}
     </div></fieldset>
@@ -125,7 +155,7 @@ const quizHtml = (): string => `<div class="modal-backdrop" id="quiz-modal">
     <fieldset><legend>Optimize for</legend><div class="choice-grid compact">
       ${["Correctness", "Production readiness", "Speed", "Creativity", "Learning", "Minimal context usage"].map((choice, index) => `<label class="choice"><input type="checkbox" name="focus" value="${choice}" ${index < 2 ? "checked" : ""}/><span>${choice}</span></label>`).join("")}
     </div></fieldset>
-    <div class="modal-actions"><button type="button" class="subtle close-quiz">Cancel</button><button type="submit" class="primary">Create companion</button></div>
+    <div class="modal-actions"><button type="button" class="subtle close-quiz">Cancel</button><button type="submit" class="subtle" data-action="create">Create only</button><button type="submit" class="primary" data-action="launch">Create &amp; launch</button></div>
   </form>
 </div>`;
 
@@ -141,12 +171,12 @@ const renderControl = (): void => {
       <article class="summary-card"><span>Local event bridge</span><strong class="online"><i></i>Listening</strong><small>${escapeHtml(snapshot.bridge.url)}</small></article>
       <article class="summary-card"><span>Providers</span><strong>${new Set(snapshot.sessions.map((session) => session.provider)).size || "—"}</strong><small>Codex + Claude Code ready</small></article>
     </section>
+    ${setupHtml()}
     <section class="section-heading"><div><span class="eyebrow">Habitat</span><h2>Sessions</h2></div>${snapshot.sessions.length ? "" : `<button id="demo-sessions" class="subtle">Add demo creatures</button>`}</section>
     <section class="session-grid">${snapshot.sessions.length ? snapshot.sessions.map(sessionCard).join("") : `<div class="empty-state"><div class="empty-creature"><i></i><i></i><b></b></div><h3>The habitat is quiet</h3><p>Create a session or connect one of the provider bridges.</p><button class="primary" id="empty-new-session">Hatch your first companion</button></div>`}</section>
-    <section class="integration-panel">
-      <div><span class="eyebrow">Provider bridge</span><h2>Connect real sessions</h2><p>Claude Code and Codex hooks post authenticated local events here. The generated bridge configuration stays on this computer.</p></div>
+    <section class="integration-panel compact-panel">
+      <div><span class="eyebrow">Local bridge details</span><h2>Private by design</h2><p>Provider hooks post authenticated events only to this computer. Manual instructions remain available in <code>INTEGRATIONS.md</code>.</p></div>
       <dl><div><dt>Endpoint</dt><dd>${escapeHtml(snapshot.bridge.url)}</dd></div><div><dt>Bridge config</dt><dd>${escapeHtml(snapshot.bridge.configPath)}</dd></div></dl>
-      <p class="integration-note">Run the setup commands in <code>INTEGRATIONS.md</code>. Ordinary ChatGPT chats remain experimental; this MVP does not scrape the screen.</p>
     </section>
   </main>
   ${quizOpen ? quizHtml() : ""}`;
@@ -154,12 +184,27 @@ const renderControl = (): void => {
 };
 
 const bindControlEvents = (): void => {
-  const openQuiz = () => {
+  const openQuiz = (provider?: Provider) => {
+    if (provider) quizProvider = provider;
     quizOpen = true;
     renderControl();
   };
-  document.querySelector("#new-session")?.addEventListener("click", openQuiz);
-  document.querySelector("#empty-new-session")?.addEventListener("click", openQuiz);
+  document.querySelector("#new-session")?.addEventListener("click", () => openQuiz());
+  document.querySelector("#empty-new-session")?.addEventListener("click", () => openQuiz());
+  document.querySelectorAll<HTMLButtonElement>(".launch-provider").forEach((button) =>
+    button.addEventListener("click", () => openQuiz(button.dataset.provider as ConnectableProvider)),
+  );
+  document.querySelectorAll<HTMLButtonElement>(".install-provider").forEach((button) =>
+    button.addEventListener("click", async () => {
+      const provider = button.dataset.provider as ConnectableProvider;
+      button.disabled = true;
+      button.textContent = "Setting up…";
+      const result = await window.companion.installIntegration(provider);
+      onboarding = result.state;
+      window.alert(result.message);
+      renderControl();
+    }),
+  );
   document.querySelector("#overlay-toggle")?.addEventListener("change", (event) => {
     void window.companion.setOverlayEnabled((event.target as HTMLInputElement).checked);
   });
@@ -169,7 +214,12 @@ const bindControlEvents = (): void => {
       renderControl();
     }),
   );
-  document.querySelector<HTMLFormElement>("#quiz-form")?.addEventListener("submit", (event) => {
+  document.querySelector("#choose-directory")?.addEventListener("click", async () => {
+    const directory = await window.companion.chooseDirectory();
+    const input = document.querySelector<HTMLInputElement>('input[name="cwd"]');
+    if (directory && input) input.value = directory;
+  });
+  document.querySelector<HTMLFormElement>("#quiz-form")?.addEventListener("submit", async (event) => {
     event.preventDefault();
     const data = new FormData(event.currentTarget as HTMLFormElement);
     const partial = {
@@ -183,9 +233,21 @@ const bindControlEvents = (): void => {
       title: String(data.get("title")),
       provider: String(data.get("provider")) as Provider,
       profile,
+      cwd: String(data.get("cwd") ?? "").trim() || undefined,
     };
+    const action = ((event as SubmitEvent).submitter as HTMLButtonElement | null)?.dataset.action ?? "create";
+    if (action === "launch" && input.provider !== "codex" && input.provider !== "claude") {
+      window.alert("Automatic launch is currently available for Codex and Claude Code. Use Create only for other providers.");
+      return;
+    }
     quizOpen = false;
-    void window.companion.createSession(input);
+    renderControl();
+    if (action === "launch") {
+      const result = await window.companion.launchSession(input);
+      if (!result.launched) window.alert(result.error ?? "The provider could not be launched.");
+    } else {
+      await window.companion.createSession(input);
+    }
   });
   document.querySelector("#demo-sessions")?.addEventListener("click", async () => {
     await window.companion.createSession({ provider: "codex", title: "Leyline · interface pass" });
@@ -281,7 +343,12 @@ const bindOverlayEvents = (): void => {
 
 const render = (): void => (surface === "overlay" ? renderOverlay() : renderControl());
 
-snapshot = await window.companion.getSnapshot();
+if (surface === "control") {
+  [snapshot, onboarding] = await Promise.all([window.companion.getSnapshot(), window.companion.getOnboarding()]);
+} else {
+  snapshot = await window.companion.getSnapshot();
+  onboarding = { providers: [] };
+}
 render();
 window.companion.onSnapshot((nextSnapshot) => {
   snapshot = nextSnapshot;

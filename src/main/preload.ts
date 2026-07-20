@@ -2,14 +2,19 @@ import { contextBridge, ipcRenderer } from "electron";
 import type {
   AppSnapshot,
   CompanionApi,
+  ConnectableProvider,
   CreateSessionInput,
   CreatureSession,
+  IntegrationResult,
+  LaunchSessionResult,
+  OnboardingState,
   SessionStatus,
   UpdateSessionInput,
 } from "../shared/types";
 
 const api: CompanionApi = {
   getSnapshot: () => ipcRenderer.invoke("companion:get-snapshot") as Promise<AppSnapshot>,
+  getOnboarding: () => ipcRenderer.invoke("companion:get-onboarding") as Promise<OnboardingState>,
   onSnapshot: (callback) => {
     const listener = (_event: Electron.IpcRendererEvent, snapshot: AppSnapshot) => callback(snapshot);
     ipcRenderer.on("companion:snapshot", listener);
@@ -17,6 +22,11 @@ const api: CompanionApi = {
   },
   createSession: (input: CreateSessionInput) =>
     ipcRenderer.invoke("companion:create-session", input) as Promise<CreatureSession>,
+  launchSession: (input: CreateSessionInput) =>
+    ipcRenderer.invoke("companion:launch-session", input) as Promise<LaunchSessionResult>,
+  installIntegration: (provider: ConnectableProvider) =>
+    ipcRenderer.invoke("companion:install-integration", provider) as Promise<IntegrationResult>,
+  chooseDirectory: () => ipcRenderer.invoke("companion:choose-directory") as Promise<string | null>,
   updateSession: (input: UpdateSessionInput) => ipcRenderer.invoke("companion:update-session", input) as Promise<void>,
   removeSession: (id: string) => ipcRenderer.invoke("companion:remove-session", id) as Promise<void>,
   chooseAsset: (id: string, status: SessionStatus) =>

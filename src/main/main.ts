@@ -1,5 +1,6 @@
 import { Buffer } from "node:buffer";
 import { existsSync } from "node:fs";
+import { homedir } from "node:os";
 import { extname, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import {
@@ -15,8 +16,16 @@ import {
   screen,
   Tray,
 } from "electron";
-import type { CreateSessionInput, SessionStatus, UpdateSessionInput } from "../shared/types";
+import type {
+  ConnectableProvider,
+  CreateSessionInput,
+  LaunchSessionResult,
+  SessionStatus,
+  UpdateSessionInput,
+} from "../shared/types";
 import { startEventServer, type EventServerResult } from "./event-server";
+import { IntegrationManager } from "./integration-manager";
+import { ProviderLauncher } from "./provider-launcher";
 import { SessionRegistry } from "./session-registry";
 import { CompanionStore } from "./store";
 
@@ -31,6 +40,8 @@ let controlWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let store: CompanionStore;
 let registry: SessionRegistry;
+let integrationManager: IntegrationManager;
+let providerLauncher: ProviderLauncher;
 let eventServer: EventServerResult | null = null;
 let isQuitting = false;
 const overlayWindows = new Map<string, BrowserWindow>();
@@ -165,9 +176,37 @@ const quitApp = (): void => {
 
 const registerIpc = (): void => {
   ipcMain.handle("companion:get-snapshot", () => registry.snapshot());
+  ipcMain.handle("companion:get-onboarding", () => integrationManager.getState());
   ipcMain.handle("companion:create-session", (_event, input: CreateSessionInput) => {
     const displayId = String(screen.getPrimaryDisplay().id);
     return registry.create(input, displayId);
+  });
+  ipcMain.handle("companion:install-integration", (_event, provider: ConnectableProvider) => {
+    if (provider !== "claude" && provider !== "codex") throw new Error("Unsupported provider");
+    return integrationManager.install(provider);
+  });
+  ipcMain.handle("companion:choose-directory", async () => {
+    const options: Electron.OpenDialogOptions = { title: "Choose the session working folder", properties: ["openDirectory"] };
+    const result = controlWindow ? await dialog.showOpenDialog(controlWindow, options) : await dialog.showOpenDialog(options);
+    return result.canceled ? null : (result.filePaths[0] ?? null);
+  });
+  ipcMain.handle("companion:launch-session", (_event, input: CreateSessionInput): LaunchSessionResult => {
+    if (input.provider !== "claude" && input.provider !== "codex") {
+      throw new Error("Automatic launch is available for Codex and Claude Code only.");
+    }
+    const displayId = String(screen.getPrimaryDisplay().id);
+    const session = registry.create(input, displayId);
+    registry.update({ id: session.id, status: "starting", statusMessage: "Opening provider terminal…" });
+    try {
+      providerLauncher.launch(input, session.id);
+      const launchedSession = registry.snapshot().sessions.find((candidate) => candidate.id === session.id) ?? session;
+      return { launched: true, session: launchedSession };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Provider launch failed";
+      registry.update({ id: session.id, status: "blocked", statusMessage: message });
+      const blockedSession = registry.snapshot().sessions.find((candidate) => candidate.id === session.id) ?? session;
+      return { launched: false, session: blockedSession, error: message };
+    }
   });
   ipcMain.handle("companion:update-session", (_event, input: UpdateSessionInput) => registry.update(input));
   ipcMain.handle("companion:remove-session", (_event, id: string) => registry.remove(id));
@@ -206,6 +245,8 @@ app.whenReady().then(async () => {
     token: store.settings.bridgeToken,
     configPath: store.bridgeConfigPath,
   });
+  integrationManager = new IntegrationManager(homedir(), app.getAppPath());
+  providerLauncher = new ProviderLauncher(integrationManager, app.getAppPath());
   eventServer = await startEventServer(store.settings.bridgePort, store.settings.bridgeToken, (event) => {
     const session = registry.ingest(event);
     if (!session.position?.displayId) {

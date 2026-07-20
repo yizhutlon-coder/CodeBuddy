@@ -8,6 +8,20 @@ Start Creature Companion once before configuring providers. It creates this loca
 
 The file contains a loopback URL and random bearer token. Do not commit it.
 
+## Recommended automatic setup
+
+In the Creature Companion control panel, find **Quick setup** and click **Set up automatically** for the provider you use. The setup process:
+
+1. Detects the Codex or Claude Code CLI on your `PATH`.
+2. Reads and merges your existing provider JSON instead of replacing unrelated settings.
+3. Adds one Creature Companion handler for each supported lifecycle event.
+4. Creates a timestamped backup beside the original file before writing.
+5. Reports the provider-specific trust or restart step in the UI.
+
+After setup, click **Launch a session**, choose a project folder, complete the short collaboration profile, and use **Create & launch**. The new terminal inherits a private launch ID so its first provider event binds to the pending creature automatically.
+
+If a configuration file contains invalid JSON, automatic setup stops without changing it. Fix the JSON or use the manual instructions below.
+
 ## Test the bridge
 
 With Creature Companion running:
@@ -20,7 +34,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File C:\ElectronApp\scripts\send-
 
 The same session creature should move from Idle to Needs input to Ready.
 
-## Claude Code
+## Manual Claude Code setup
 
 Merge the contents of `integrations/claude-settings.example.json` into your user-level Claude settings:
 
@@ -32,7 +46,7 @@ Do not overwrite existing settings or hooks. Merge the `hooks` entries and the `
 
 The lifecycle bridge reports session start, tool activity, permission requests, failures, and completion. The status-line bridge supplies exact context usage plus five-hour and seven-day subscription limit data when Claude provides it.
 
-## Codex
+## Manual Codex setup
 
 Merge `integrations/codex-hooks.example.json` into your user hook file:
 

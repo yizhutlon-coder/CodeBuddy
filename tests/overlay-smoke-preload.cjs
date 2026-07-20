@@ -17,8 +17,17 @@ const snapshot = {
 
 contextBridge.exposeInMainWorld("companion", {
   getSnapshot: async () => snapshot,
+  getOnboarding: async () => ({
+    providers: [
+      { provider: "codex", displayName: "Codex", installed: true, executablePath: "codex.cmd", configPath: "hooks.json", configured: true, telemetryConfigured: true, requiresTrust: true },
+      { provider: "claude", displayName: "Claude Code", installed: true, executablePath: "claude.cmd", configPath: "settings.json", configured: false, telemetryConfigured: false, requiresTrust: false },
+    ],
+  }),
   onSnapshot: () => () => {},
   createSession: async () => undefined,
+  launchSession: async () => undefined,
+  installIntegration: async () => undefined,
+  chooseDirectory: async () => null,
   updateSession: async () => undefined,
   removeSession: async () => undefined,
   chooseAsset: async () => null,
