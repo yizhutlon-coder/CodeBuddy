@@ -28,6 +28,8 @@ try {
   const manager = new IntegrationManager(home, appPath, "");
   const installerScript = readFileSync(join(__dirname, "../scripts/install-codex-cli.ps1"), "utf8");
   const reviewScript = readFileSync(join(__dirname, "../scripts/review-codex-hooks.ps1"), "utf8");
+  const launchScript = readFileSync(join(__dirname, "../scripts/launch-provider.ps1"), "utf8");
+  const providerLauncherSource = readFileSync(join(__dirname, "../src/main/provider-launcher.ts"), "utf8");
   assert.match(installerScript, /https:\/\/chatgpt\.com\/codex\/install\.ps1/);
   assert.match(installerScript, /Invoke-WebRequest/);
   assert.doesNotMatch(installerScript, /Invoke-RestMethod/, "octet-stream installers must be downloaded as a file, not cast to text");
@@ -35,6 +37,13 @@ try {
   assert.match(reviewScript, /CODEX_HOME/);
   assert.match(reviewScript, /Hook file:/);
   assert.doesNotMatch(reviewScript, /bypass-hook-trust/, "guided onboarding must preserve Codex's explicit trust review");
+  assert.match(
+    providerLauncherSource,
+    /providerEnvironment\.CODEX_HOME = join\(this\.homeDir, "\.codex"\)/,
+    "guided Codex sessions must use the same configuration home as the installed hooks",
+  );
+  assert.match(launchScript, /Codex configuration directory was not supplied/);
+  assert.match(launchScript, /exited during startup with code/);
   assert.equal(manager.install("claude").ok, true);
   const firstClaude = readFileSync(claudePath, "utf8");
   assert.equal(manager.install("claude").ok, true);

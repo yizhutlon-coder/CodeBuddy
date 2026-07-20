@@ -302,7 +302,7 @@ app.whenReady().then(async () => {
     configPath: store.bridgeConfigPath,
   });
   integrationManager = new IntegrationManager(homedir(), app.getAppPath());
-  providerLauncher = new ProviderLauncher(integrationManager, app.getAppPath());
+  providerLauncher = new ProviderLauncher(integrationManager, app.getAppPath(), homedir());
   onboardingLauncher = new OnboardingLauncher(app.getAppPath(), homedir());
   eventServer = await startEventServer(store.settings.bridgePort, store.settings.bridgeToken, (event) => {
     const session = registry.ingest(event);

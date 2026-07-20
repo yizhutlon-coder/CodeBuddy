@@ -8,6 +8,7 @@ export class ProviderLauncher {
   constructor(
     private readonly integrations: IntegrationManager,
     private readonly appPath: string,
+    private readonly homeDir: string,
   ) {}
 
   launch(input: CreateSessionInput, launchId: string): number {
@@ -25,11 +26,14 @@ export class ProviderLauncher {
     const scriptPath = join(this.appPath, "scripts", "launch-provider.ps1");
     if (!existsSync(scriptPath)) throw new Error(`Provider launch script not found at ${scriptPath}`);
 
-    return launchVisiblePowerShell(scriptPath, cwd, ["-Provider", provider], {
+    const providerEnvironment: Record<string, string> = {
       CREATURE_COMPANION_PROVIDER_EXE: executable,
       CREATURE_COMPANION_SESSION_TITLE: input.title.trim() || "Creature Companion session",
       CREATURE_COMPANION_SESSION_CONTRACT: input.profile?.contract ?? "",
       CREATURE_COMPANION_LAUNCH_ID: launchId,
-    });
+    };
+    if (provider === "codex") providerEnvironment.CODEX_HOME = join(this.homeDir, ".codex");
+
+    return launchVisiblePowerShell(scriptPath, cwd, ["-Provider", provider], providerEnvironment);
   }
 }

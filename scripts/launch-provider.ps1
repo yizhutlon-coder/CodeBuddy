@@ -22,12 +22,22 @@ try {
     }
     & $providerExecutable @arguments
   } else {
+    if ([string]::IsNullOrWhiteSpace($env:CODEX_HOME)) {
+      throw 'The Codex configuration directory was not supplied by Creature Companion.'
+    }
+    Write-Host 'Starting Codex with configuration from ' -NoNewline
+    Write-Host $env:CODEX_HOME -ForegroundColor Cyan
     if ([string]::IsNullOrWhiteSpace($sessionContract)) {
       & $providerExecutable
     } else {
       & $providerExecutable $sessionContract
     }
   }
+  if ($LASTEXITCODE -ne 0) {
+    throw "$Provider exited during startup with code $LASTEXITCODE."
+  }
+  Write-Host ''
+  Write-Host "$Provider session ended. You can close this window." -ForegroundColor Cyan
 } catch {
   Write-Host ''
   Write-Host "Creature Companion could not launch $Provider." -ForegroundColor Red
