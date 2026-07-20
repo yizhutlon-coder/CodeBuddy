@@ -63,16 +63,20 @@ export interface CompanionSettings {
 }
 
 export type ConnectableProvider = "claude" | "codex";
+export type ProviderActivity = Partial<Record<ConnectableProvider, number>>;
 
 export interface ProviderSetupStatus {
   provider: ConnectableProvider;
   displayName: string;
+  hostDetected: boolean;
   installed: boolean;
   executablePath?: string;
   configPath: string;
   configured: boolean;
   telemetryConfigured: boolean;
   requiresTrust: boolean;
+  verified: boolean;
+  lastEventAt?: number;
   warning?: string;
 }
 
@@ -84,6 +88,12 @@ export interface IntegrationResult {
   ok: boolean;
   message: string;
   backupPath?: string;
+  state: OnboardingState;
+}
+
+export interface OnboardingActionResult {
+  ok: boolean;
+  message: string;
   state: OnboardingState;
 }
 
@@ -137,10 +147,13 @@ export interface IncomingEvent {
 export interface CompanionApi {
   getSnapshot(): Promise<AppSnapshot>;
   getOnboarding(): Promise<OnboardingState>;
+  onOnboarding(callback: (state: OnboardingState) => void): () => void;
   onSnapshot(callback: (snapshot: AppSnapshot) => void): () => void;
   createSession(input: CreateSessionInput): Promise<CreatureSession>;
   launchSession(input: CreateSessionInput): Promise<LaunchSessionResult>;
   installIntegration(provider: ConnectableProvider): Promise<IntegrationResult>;
+  installCodexCli(): Promise<OnboardingActionResult>;
+  reviewCodexHooks(): Promise<OnboardingActionResult>;
   chooseDirectory(): Promise<string | null>;
   updateSession(input: UpdateSessionInput): Promise<void>;
   removeSession(id: string): Promise<void>;

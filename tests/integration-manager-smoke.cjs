@@ -26,6 +26,11 @@ writeFileSync(
 
 try {
   const manager = new IntegrationManager(home, appPath, "");
+  const installerScript = readFileSync(join(__dirname, "../scripts/install-codex-cli.ps1"), "utf8");
+  const reviewScript = readFileSync(join(__dirname, "../scripts/review-codex-hooks.ps1"), "utf8");
+  assert.match(installerScript, /https:\/\/chatgpt\.com\/codex\/install\.ps1/);
+  assert.match(reviewScript, /\/hooks/);
+  assert.doesNotMatch(reviewScript, /bypass-hook-trust/, "guided onboarding must preserve Codex's explicit trust review");
   assert.equal(manager.install("claude").ok, true);
   const firstClaude = readFileSync(claudePath, "utf8");
   assert.equal(manager.install("claude").ok, true);
@@ -50,6 +55,10 @@ try {
     assert.equal(commands.filter((command) => command.includes("companion-hook.ps1")).length, 1, `${event} should have one companion hook`);
   }
   assert.equal(readFileSync(codexPath, "utf8"), firstCodex, "reinstall should be content-idempotent");
+  const verifiedCodex = manager.getState({ codex: 1234 }).providers.find((provider) => provider.provider === "codex");
+  assert.equal(verifiedCodex.verified, true);
+  assert.equal(verifiedCodex.lastEventAt, 1234);
+  assert.equal(verifiedCodex.requiresTrust, false, "a real Codex event proves the hook trust gate was passed");
 
   writeFileSync(codexPath, "{not valid json");
   const invalidBefore = readFileSync(codexPath, "utf8");

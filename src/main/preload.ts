@@ -7,6 +7,7 @@ import type {
   CreatureSession,
   IntegrationResult,
   LaunchSessionResult,
+  OnboardingActionResult,
   OnboardingState,
   SessionStatus,
   UpdateSessionInput,
@@ -15,6 +16,11 @@ import type {
 const api: CompanionApi = {
   getSnapshot: () => ipcRenderer.invoke("companion:get-snapshot") as Promise<AppSnapshot>,
   getOnboarding: () => ipcRenderer.invoke("companion:get-onboarding") as Promise<OnboardingState>,
+  onOnboarding: (callback) => {
+    const listener = (_event: Electron.IpcRendererEvent, state: OnboardingState) => callback(state);
+    ipcRenderer.on("companion:onboarding", listener);
+    return () => ipcRenderer.off("companion:onboarding", listener);
+  },
   onSnapshot: (callback) => {
     const listener = (_event: Electron.IpcRendererEvent, snapshot: AppSnapshot) => callback(snapshot);
     ipcRenderer.on("companion:snapshot", listener);
@@ -26,6 +32,8 @@ const api: CompanionApi = {
     ipcRenderer.invoke("companion:launch-session", input) as Promise<LaunchSessionResult>,
   installIntegration: (provider: ConnectableProvider) =>
     ipcRenderer.invoke("companion:install-integration", provider) as Promise<IntegrationResult>,
+  installCodexCli: () => ipcRenderer.invoke("companion:install-codex-cli") as Promise<OnboardingActionResult>,
+  reviewCodexHooks: () => ipcRenderer.invoke("companion:review-codex-hooks") as Promise<OnboardingActionResult>,
   chooseDirectory: () => ipcRenderer.invoke("companion:choose-directory") as Promise<string | null>,
   updateSession: (input: UpdateSessionInput) => ipcRenderer.invoke("companion:update-session", input) as Promise<void>,
   removeSession: (id: string) => ipcRenderer.invoke("companion:remove-session", id) as Promise<void>,

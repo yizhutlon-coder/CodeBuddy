@@ -5,6 +5,7 @@ import {
   mkdirSync,
   readFileSync,
   renameSync,
+  readdirSync,
   unlinkSync,
   writeFileSync,
 } from "node:fs";
@@ -13,6 +14,7 @@ import type {
   ConnectableProvider,
   IntegrationResult,
   OnboardingState,
+  ProviderActivity,
   ProviderSetupStatus,
 } from "../shared/types";
 
@@ -42,20 +44,23 @@ export class IntegrationManager {
   private readonly codexConfigPath: string;
   private readonly hookScriptPath: string;
   private readonly statusLineScriptPath: string;
+  private readonly localAppData: string;
 
   constructor(
     private readonly homeDir: string,
     private readonly appPath: string,
     private readonly pathValue = process.env.PATH ?? "",
+    localAppData = process.env.LOCALAPPDATA ?? "",
   ) {
     this.claudeConfigPath = join(homeDir, ".claude", "settings.json");
     this.codexConfigPath = join(homeDir, ".codex", "hooks.json");
     this.hookScriptPath = join(appPath, "scripts", "companion-hook.ps1");
     this.statusLineScriptPath = join(appPath, "scripts", "claude-statusline.ps1");
+    this.localAppData = localAppData;
   }
 
-  getState(): OnboardingState {
-    return { providers: [this.inspectProvider("codex"), this.inspectProvider("claude")] };
+  getState(activity: ProviderActivity = {}): OnboardingState {
+    return { providers: [this.inspectProvider("codex", activity), this.inspectProvider("claude", activity)] };
   }
 
   findExecutable(provider: ConnectableProvider): string | undefined {
@@ -66,11 +71,13 @@ export class IntegrationManager {
       env: { ...process.env, PATH: this.pathValue },
       timeout: 4_000,
     });
-    if (result.status !== 0) return undefined;
-    const candidates = result.stdout
+    const candidates = [
+      ...this.defaultExecutablePaths(provider),
+      ...(result.status === 0 ? result.stdout : "")
       .split(/\r?\n/)
       .map((line) => line.trim())
-      .filter(Boolean);
+      .filter(Boolean),
+    ].filter((candidate, index, values) => values.indexOf(candidate) === index && existsSync(candidate));
     return candidates.find((candidate) => {
       const probe = spawnSync(candidate, ["--version"], {
         encoding: "utf8",
@@ -82,29 +89,31 @@ export class IntegrationManager {
     });
   }
 
-  install(provider: ConnectableProvider): IntegrationResult {
+  install(provider: ConnectableProvider, activity: ProviderActivity = {}): IntegrationResult {
     try {
       if (!existsSync(this.hookScriptPath)) throw new Error(`Bridge script not found at ${this.hookScriptPath}`);
       if (provider === "claude" && !existsSync(this.statusLineScriptPath)) {
         throw new Error(`Status-line script not found at ${this.statusLineScriptPath}`);
       }
       const result = provider === "claude" ? this.installClaude() : this.installCodex();
-      return { ok: true, ...result, state: this.getState() };
+      return { ok: true, ...result, state: this.getState(activity) };
     } catch (error) {
       return {
         ok: false,
         message: error instanceof Error ? error.message : "Integration setup failed",
-        state: this.getState(),
+        state: this.getState(activity),
       };
     }
   }
 
-  private inspectProvider(provider: ConnectableProvider): ProviderSetupStatus {
+  private inspectProvider(provider: ConnectableProvider, activity: ProviderActivity): ProviderSetupStatus {
     const executablePath = this.findExecutable(provider);
     const configPath = provider === "claude" ? this.claudeConfigPath : this.codexConfigPath;
     let configured = false;
     let telemetryConfigured = provider === "codex";
     let warning: string | undefined;
+    const lastEventAt = activity[provider];
+    const verified = typeof lastEventAt === "number";
     try {
       const config = this.readJson(configPath);
       const hooks = provider === "claude" ? config.hooks : isObject(config.hooks) ? config.hooks : {};
@@ -123,14 +132,45 @@ export class IntegrationManager {
     return {
       provider,
       displayName: provider === "claude" ? "Claude Code" : "Codex",
+      hostDetected: this.detectHost(provider, Boolean(executablePath)),
       installed: Boolean(executablePath),
       executablePath,
       configPath,
       configured,
       telemetryConfigured,
-      requiresTrust: configured,
+      requiresTrust: provider === "codex" && configured && !verified,
+      verified,
+      lastEventAt,
       warning,
     };
+  }
+
+  private defaultExecutablePaths(provider: ConnectableProvider): string[] {
+    if (process.platform !== "win32") return [];
+    if (provider === "codex") {
+      return [join(this.localAppData, "Programs", "OpenAI", "Codex", "bin", "codex.exe")];
+    }
+    return [
+      join(this.homeDir, ".local", "bin", "claude.exe"),
+      join(this.localAppData, "Programs", "Claude", "claude.exe"),
+    ];
+  }
+
+  private detectHost(provider: ConnectableProvider, cliInstalled: boolean): boolean {
+    if (cliInstalled) return true;
+    if (process.platform !== "win32" || !this.localAppData) return false;
+    const packagesPath = join(this.localAppData, "Packages");
+    try {
+      const packagePrefix = provider === "codex" ? "OpenAI.Codex_" : "Anthropic.Claude_";
+      if (readdirSync(packagesPath).some((name) => name.startsWith(packagePrefix))) return true;
+    } catch {
+      // Package discovery is best-effort; restricted package folders are common.
+    }
+    const programCandidates =
+      provider === "codex"
+        ? [join(this.localAppData, "Programs", "OpenAI", "Codex")]
+        : [join(this.localAppData, "Programs", "Claude"), join(this.localAppData, "AnthropicClaude")];
+    return programCandidates.some((path) => existsSync(path));
   }
 
   private installClaude(): { message: string; backupPath?: string } {
@@ -168,7 +208,7 @@ export class IntegrationManager {
     config.hooks = hooks;
     const backupPath = this.writeJsonWithBackup(this.codexConfigPath, config);
     return {
-      message: "Codex hooks configured. Start a new Codex task, open /hooks, and trust the Creature Companion commands before they can run.",
+      message: "Codex hooks configured. Continue with Review & trust hooks in Guided setup; /hooks is available in the Codex CLI, not Desktop chat.",
       backupPath,
     };
   }

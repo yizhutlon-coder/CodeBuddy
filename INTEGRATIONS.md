@@ -8,19 +8,21 @@ Start Creature Companion once before configuring providers. It creates this loca
 
 The file contains a loopback URL and random bearer token. Do not commit it.
 
-## Recommended automatic setup
+## Recommended guided setup
 
-In the Creature Companion control panel, find **Quick setup** and click **Set up automatically** for the provider you use. The setup process:
+In the Creature Companion control panel, follow **Guided setup** for the provider you use. It tracks these steps independently:
 
-1. Detects the Codex or Claude Code CLI on your `PATH`.
-2. Reads and merges your existing provider JSON instead of replacing unrelated settings.
-3. Adds one Creature Companion handler for each supported lifecycle event.
-4. Creates a timestamped backup beside the original file before writing.
-5. Reports the provider-specific trust or restart step in the UI.
+1. Provider application detection.
+2. Standalone interactive CLI availability.
+3. Safe hook configuration with existing JSON fields preserved.
+4. Provider-specific restart or hook-trust action.
+5. Live verification from the first authenticated provider event.
+
+If the standalone Codex CLI is missing, **Install Codex CLI** opens OpenAI's official Windows installer in a visible PowerShell terminal after confirmation. When installation finishes, use **Check again**, then **Review & trust hooks**. In the opened Codex CLI, enter `/hooks` and trust the Creature Companion commands. The `/hooks` command is a CLI command and does not open inside a Codex Desktop chat.
 
 After setup, click **Launch a session**, choose a project folder, complete the short collaboration profile, and use **Create & launch**. The new terminal inherits a private launch ID so its first provider event binds to the pending creature automatically.
 
-The control panel reports hook configuration separately from CLI availability. If the hooks are configured but **Launch a session** is disabled, open the provider normally; its lifecycle events can still create and update a creature. For Codex, start a new task after setup and use `/hooks` to trust the new commands. Codex deliberately skips untrusted hooks.
+The control panel reports hook configuration separately from CLI availability and live verification. If the hooks are configured but **Launch a session** is unavailable, open the provider normally; its lifecycle events can still create and update a creature. Codex deliberately skips untrusted hooks, so its card remains unverified until a trusted hook sends an event.
 
 If a configuration file contains invalid JSON, automatic setup stops without changing it. Fix the JSON or use the manual instructions below.
 

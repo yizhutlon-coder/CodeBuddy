@@ -28,9 +28,9 @@ app.whenReady().then(async () => {
       bodyText: document.body.innerText
     })`);
     if (state.title !== "Creature Companion") throw new Error("Control panel title did not render.");
-    if (state.setupCards !== 2 || state.launchButtons !== 2) throw new Error("Provider onboarding cards did not render.");
-    if (!state.bodyText.includes("1 / 2 ready")) throw new Error("Onboarding readiness summary is missing.");
-    if (!state.bodyText.includes("Hooks configured")) throw new Error(`Configured hook status is missing: ${state.bodyText}`);
+    if (state.setupCards !== 2 || state.launchButtons !== 1) throw new Error("Provider onboarding cards did not render expected actions.");
+    if (!state.bodyText.includes("1 / 2 live")) throw new Error("Onboarding live-verification summary is missing.");
+    if (!state.bodyText.includes("Live connection verified")) throw new Error(`Verified provider status is missing: ${state.bodyText}`);
     console.log("Control panel onboarding smoke test passed.");
     app.exit(0);
   } catch (error) {

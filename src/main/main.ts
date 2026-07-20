@@ -20,11 +20,13 @@ import type {
   ConnectableProvider,
   CreateSessionInput,
   LaunchSessionResult,
+  OnboardingActionResult,
   SessionStatus,
   UpdateSessionInput,
 } from "../shared/types";
 import { startEventServer, type EventServerResult } from "./event-server";
 import { IntegrationManager } from "./integration-manager";
+import { OnboardingLauncher } from "./onboarding-launcher";
 import { ProviderLauncher } from "./provider-launcher";
 import { SessionRegistry } from "./session-registry";
 import { CompanionStore } from "./store";
@@ -42,6 +44,7 @@ let store: CompanionStore;
 let registry: SessionRegistry;
 let integrationManager: IntegrationManager;
 let providerLauncher: ProviderLauncher;
+let onboardingLauncher: OnboardingLauncher;
 let eventServer: EventServerResult | null = null;
 let isQuitting = false;
 const overlayWindows = new Map<string, BrowserWindow>();
@@ -137,6 +140,15 @@ const broadcast = (): void => {
   }
 };
 
+const onboardingState = () => integrationManager.getState(store.providerActivity);
+
+const broadcastOnboarding = (): void => {
+  const state = onboardingState();
+  for (const window of BrowserWindow.getAllWindows()) {
+    if (!window.isDestroyed()) window.webContents.send("companion:onboarding", state);
+  }
+};
+
 const createTray = (): void => {
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32"><rect width="32" height="32" rx="10" fill="#7367f0"/><circle cx="11" cy="14" r="3" fill="white"/><circle cx="21" cy="14" r="3" fill="white"/><path d="M10 23c4 3 8 3 12 0" stroke="white" stroke-width="2" fill="none" stroke-linecap="round"/></svg>`;
   const icon = nativeImage
@@ -176,14 +188,55 @@ const quitApp = (): void => {
 
 const registerIpc = (): void => {
   ipcMain.handle("companion:get-snapshot", () => registry.snapshot());
-  ipcMain.handle("companion:get-onboarding", () => integrationManager.getState());
+  ipcMain.handle("companion:get-onboarding", () => onboardingState());
   ipcMain.handle("companion:create-session", (_event, input: CreateSessionInput) => {
     const displayId = String(screen.getPrimaryDisplay().id);
     return registry.create(input, displayId);
   });
   ipcMain.handle("companion:install-integration", (_event, provider: ConnectableProvider) => {
     if (provider !== "claude" && provider !== "codex") throw new Error("Unsupported provider");
-    return integrationManager.install(provider);
+    const result = integrationManager.install(provider, store.providerActivity);
+    broadcastOnboarding();
+    return result;
+  });
+  ipcMain.handle("companion:install-codex-cli", async (): Promise<OnboardingActionResult> => {
+    const options: Electron.MessageBoxOptions = {
+      type: "info",
+      title: "Install the Codex CLI?",
+      message: "Creature Companion will open the official OpenAI Codex installer in PowerShell.",
+      detail: "The installer is downloaded from https://chatgpt.com/codex/install.ps1 and installs into your user profile. You can review its output in the terminal.",
+      buttons: ["Install Codex CLI", "Cancel"],
+      defaultId: 0,
+      cancelId: 1,
+      noLink: true,
+    };
+    const confirmation = controlWindow ? await dialog.showMessageBox(controlWindow, options) : await dialog.showMessageBox(options);
+    if (confirmation.response !== 0) return { ok: false, message: "Codex CLI installation canceled.", state: onboardingState() };
+    try {
+      onboardingLauncher.launchCodexInstaller();
+      return {
+        ok: true,
+        message: "The official Codex installer is open. When it finishes, return here and click Check again.",
+        state: onboardingState(),
+      };
+    } catch (error) {
+      return { ok: false, message: error instanceof Error ? error.message : "Installer launch failed", state: onboardingState() };
+    }
+  });
+  ipcMain.handle("companion:review-codex-hooks", (): OnboardingActionResult => {
+    const executable = integrationManager.findExecutable("codex");
+    if (!executable) return { ok: false, message: "Install the standalone Codex CLI first.", state: onboardingState() };
+    try {
+      clipboard.writeText("/hooks");
+      onboardingLauncher.launchCodexHookReview(executable);
+      return {
+        ok: true,
+        message: "Codex CLI is opening. Type or paste /hooks, then trust the Creature Companion commands.",
+        state: onboardingState(),
+      };
+    } catch (error) {
+      return { ok: false, message: error instanceof Error ? error.message : "Codex hook review could not open", state: onboardingState() };
+    }
   });
   ipcMain.handle("companion:choose-directory", async () => {
     const options: Electron.OpenDialogOptions = { title: "Choose the session working folder", properties: ["openDirectory"] };
@@ -247,8 +300,13 @@ app.whenReady().then(async () => {
   });
   integrationManager = new IntegrationManager(homedir(), app.getAppPath());
   providerLauncher = new ProviderLauncher(integrationManager, app.getAppPath());
+  onboardingLauncher = new OnboardingLauncher(app.getAppPath());
   eventServer = await startEventServer(store.settings.bridgePort, store.settings.bridgeToken, (event) => {
     const session = registry.ingest(event);
+    if (event.provider === "codex" || event.provider === "claude") {
+      store.recordProviderActivity(event.provider);
+      broadcastOnboarding();
+    }
     if (!session.position?.displayId) {
       registry.update({
         id: session.id,

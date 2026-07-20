@@ -35,9 +35,11 @@ pnpm run dev
 
 On Windows, after the first install and build, you can also double-click `launch.cmd`.
 
-After the application starts, use **Set up automatically** for Codex or Claude Code. Creature Companion detects each CLI, preserves existing settings and hooks, creates a timestamped configuration backup, and shows the remaining provider trust step. Then choose **Launch a session**, select a working folder, and the app opens an interactive provider terminal that is already paired with its creature.
+After the application starts, follow the **Guided setup** checklist for each provider. Creature Companion reports provider-app detection, standalone CLI availability, hook configuration, and verified live activity separately.
 
-Hook configuration and automatic terminal launch are reported separately. A provider can connect sessions through hooks even when its interactive CLI is not on `PATH`; in that case, open the session in the provider normally. Codex requires a new task plus explicit trust through `/hooks` before newly configured hooks run.
+For Codex, the wizard can open OpenAI's official standalone CLI installer when the CLI is missing. It then opens a dedicated terminal explaining the one unavoidable trust action: enter `/hooks` inside the Codex CLI and approve the Creature Companion commands. `/hooks` is not available in Codex Desktop chats. The app does not claim a live connection until an authenticated provider event actually arrives.
+
+For Claude Code, the wizard safely merges the lifecycle and status-line hooks, then waits for an event after Claude Code restarts. A timestamped backup is created before any provider configuration is replaced.
 
 See [INTEGRATIONS.md](./INTEGRATIONS.md) for manual setup and troubleshooting.
 
@@ -48,6 +50,7 @@ See [INTEGRATIONS.md](./INTEGRATIONS.md) for manual setup and troubleshooting.
 - Local media is served through a restricted custom protocol and only if the user selected that exact file.
 - Hook delivery failures never block or modify the provider's work.
 - Automatic setup preserves existing JSON fields and creates a timestamped backup before replacing a provider configuration file.
+- The optional Codex CLI installer requires an explicit confirmation and downloads the official installer from `https://chatgpt.com/codex/install.ps1` into a visible PowerShell session.
 - Session data, bridge credentials, and media paths stay in Electron's local `userData` directory.
 
 ## Project shape

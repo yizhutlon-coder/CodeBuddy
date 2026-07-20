@@ -1,11 +1,12 @@
 import { randomBytes } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import type { CompanionSettings, CreatureSession } from "../shared/types";
+import type { CompanionSettings, ConnectableProvider, CreatureSession, ProviderActivity } from "../shared/types";
 
 interface PersistedState {
   settings: CompanionSettings;
   sessions: CreatureSession[];
+  providerActivity: ProviderActivity;
 }
 
 const defaultSettings = (): CompanionSettings => ({
@@ -36,9 +37,10 @@ export class CompanionStore {
         status: session.status === "closed" ? "closed" : "idle",
         statusMessage: session.status === "closed" ? session.statusMessage : "Waiting for a new event",
       })) as CreatureSession[];
-      return { settings, sessions };
+      const providerActivity = parsed.providerActivity ?? {};
+      return { settings, sessions, providerActivity };
     } catch {
-      return { settings: defaultSettings(), sessions: [] };
+      return { settings: defaultSettings(), sessions: [], providerActivity: {} };
     }
   }
 
@@ -50,6 +52,10 @@ export class CompanionStore {
     return structuredClone(this.state.sessions);
   }
 
+  get providerActivity(): ProviderActivity {
+    return { ...this.state.providerActivity };
+  }
+
   setSettings(patch: Partial<CompanionSettings>): void {
     this.state.settings = { ...this.state.settings, ...patch };
     this.save();
@@ -58,6 +64,11 @@ export class CompanionStore {
 
   setSessions(sessions: CreatureSession[]): void {
     this.state.sessions = structuredClone(sessions);
+    this.save();
+  }
+
+  recordProviderActivity(provider: ConnectableProvider, at = Date.now()): void {
+    this.state.providerActivity[provider] = at;
     this.save();
   }
 

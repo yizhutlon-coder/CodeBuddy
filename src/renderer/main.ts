@@ -20,6 +20,7 @@ let snapshot: AppSnapshot;
 let onboarding: OnboardingState;
 let quizOpen = false;
 let quizProvider: Provider = "codex";
+let setupExpanded = false;
 
 const statuses: SessionStatus[] = ["starting", "working", "needs_input", "ready", "blocked", "idle"];
 const statusLabels: Record<SessionStatus, string> = {
@@ -39,32 +40,51 @@ const providerLabels: Record<Provider, string> = {
 };
 
 const setupHtml = (): string => {
+  const allVerified = onboarding.providers.length > 0 && onboarding.providers.every((provider) => provider.verified);
+  if (allVerified && !setupExpanded) {
+    return `<section class="setup-complete"><div><span class="eyebrow">Connections</span><h2>All providers are live</h2><p>Guided setup is complete. Creature Companion will keep listening for authenticated events.</p></div><button class="subtle manage-setup">Manage connections</button></section>`;
+  }
   const cards = onboarding.providers
     .map((setup) => {
-      const configured = setup.configured;
-      const status = configured ? "Hooks configured" : "Setup needed";
-      const availability = setup.installed
-        ? `Interactive CLI found at <code>${escapeHtml(setup.executablePath ?? "")}</code>`
-        : `Automatic terminal launch is unavailable because the interactive CLI is not on PATH. Sessions opened elsewhere can still connect through the configured hooks.`;
-      const trustNote = setup.provider === "codex"
-        ? "Start a new Codex task, open /hooks, and trust the Creature Companion commands. Codex skips new hooks until they are trusted."
-        : "Restart Claude Code after configuration so new sessions load the hooks.";
-      return `<article class="provider-setup-card ${configured ? "ready" : "needs-setup"}">
-        <div class="provider-setup-heading"><div><span class="provider ${setup.provider}">${escapeHtml(setup.displayName)}</span><h3>${status}</h3></div><span class="setup-state ${configured ? "connected" : "pending"}">${configured ? "Configured" : "Not configured"}</span></div>
-        <p>${availability}</p>
+      const status = setup.verified ? "Live connection verified" : setup.configured ? "Waiting for first event" : "Setup needed";
+      const statusClass = setup.verified ? "connected" : "pending";
+      const eventCopy = setup.lastEventAt ? `Last event ${new Date(setup.lastEventAt).toLocaleString()}` : "No provider event received yet";
+      const trustCopy = setup.provider === "codex"
+        ? setup.installed
+          ? "Codex CLI can open the required hook review. Desktop chat does not expose /hooks."
+          : "The standalone Codex CLI is required once to review and trust hooks. Desktop chat does not expose /hooks."
+        : "Restart Claude Code after hook setup, then interact with a session to verify it.";
+      const actions = [
+        `<button class="subtle install-provider" data-provider="${setup.provider}">${setup.configured ? "Repair hooks" : "Configure hooks"}</button>`,
+        setup.provider === "codex" && !setup.installed
+          ? `<button class="primary install-codex-cli">Install Codex CLI</button>`
+          : "",
+        setup.provider === "codex" && setup.configured && setup.installed && !setup.verified
+          ? `<button class="primary review-codex-hooks">Review &amp; trust hooks</button>`
+          : "",
+        !setup.verified ? `<button class="subtle refresh-onboarding">Check again</button>` : "",
+        setup.installed && setup.configured ? `<button class="primary launch-provider" data-provider="${setup.provider}">Launch a session</button>` : "",
+      ].join("");
+      return `<article class="provider-setup-card ${setup.verified ? "ready" : "needs-setup"}">
+        <div class="provider-setup-heading"><div><span class="provider ${setup.provider}">${escapeHtml(setup.displayName)}</span><h3>${status}</h3></div><span class="setup-state ${statusClass}">${setup.verified ? "Connected" : setup.configured ? "Configured" : "Not configured"}</span></div>
+        <ol class="setup-checklist">
+          <li class="${setup.hostDetected ? "done" : "pending"}"><i></i><span><strong>Provider app</strong>${setup.hostDetected ? "Detected" : "Not confirmed"}</span></li>
+          <li class="${setup.installed ? "done" : "pending"}"><i></i><span><strong>Interactive CLI</strong>${setup.installed ? "Available for guided launch" : setup.provider === "codex" ? "Required for hook review" : "Optional for external sessions"}</span></li>
+          <li class="${setup.configured ? "done" : "pending"}"><i></i><span><strong>Lifecycle hooks</strong>${setup.configured ? "Configured" : "Not configured"}</span></li>
+          <li class="${setup.verified ? "done" : "pending"}"><i></i><span><strong>Live event</strong>${escapeHtml(eventCopy)}</span></li>
+        </ol>
+        <p class="trust-note">${trustCopy}</p>
+        ${setup.installed ? `<p class="config-path">CLI: ${escapeHtml(setup.executablePath ?? "")}</p>` : ""}
         <p class="config-path">Configuration: ${escapeHtml(setup.configPath)}</p>
         ${setup.warning ? `<p class="setup-warning">${escapeHtml(setup.warning)}</p>` : ""}
-        ${setup.configured ? `<p class="trust-note">${trustNote}</p>` : ""}
-        <div class="setup-actions">
-          <button class="subtle install-provider" data-provider="${setup.provider}">${setup.configured ? "Repair setup" : "Set up automatically"}</button>
-          <button class="primary launch-provider" data-provider="${setup.provider}" ${setup.installed && setup.configured ? "" : "disabled"}>Launch a session</button>
-        </div>
+        <div class="setup-actions">${actions}</div>
       </article>`;
     })
     .join("");
-  const readyCount = onboarding.providers.filter((provider) => provider.configured).length;
+  const readyCount = onboarding.providers.filter((provider) => provider.verified).length;
+  const configuredCount = onboarding.providers.filter((provider) => provider.configured).length;
   return `<section class="setup-panel">
-    <div class="setup-intro"><div><span class="eyebrow">Quick setup</span><h2>Connect your coding agents</h2><p>Creature Companion can add its local hooks without replacing your existing configuration. A timestamped backup is made before every change.</p></div><strong>${readyCount} / ${onboarding.providers.length} ready</strong></div>
+    <div class="setup-intro"><div><span class="eyebrow">Guided setup</span><h2>Connect your coding agents</h2><p>Follow the highlighted action on each provider. Creature Companion only marks a connection live after it receives a real provider event.</p></div><div class="setup-summary"><strong>${readyCount} / ${onboarding.providers.length} live</strong><small>${configuredCount} hook sets configured</small></div></div>
     <div class="setup-grid">${cards}</div>
   </section>`;
 };
@@ -190,6 +210,10 @@ const renderControl = (): void => {
 };
 
 const bindControlEvents = (): void => {
+  const refreshOnboarding = async () => {
+    onboarding = await window.companion.getOnboarding();
+    renderControl();
+  };
   const openQuiz = (provider?: Provider) => {
     if (provider) quizProvider = provider;
     quizOpen = true;
@@ -200,6 +224,10 @@ const bindControlEvents = (): void => {
   document.querySelectorAll<HTMLButtonElement>(".launch-provider").forEach((button) =>
     button.addEventListener("click", () => openQuiz(button.dataset.provider as ConnectableProvider)),
   );
+  document.querySelector(".manage-setup")?.addEventListener("click", () => {
+    setupExpanded = true;
+    renderControl();
+  });
   document.querySelectorAll<HTMLButtonElement>(".install-provider").forEach((button) =>
     button.addEventListener("click", async () => {
       const provider = button.dataset.provider as ConnectableProvider;
@@ -210,6 +238,29 @@ const bindControlEvents = (): void => {
       window.alert(result.message);
       renderControl();
     }),
+  );
+  document.querySelectorAll<HTMLButtonElement>(".install-codex-cli").forEach((button) =>
+    button.addEventListener("click", async () => {
+      button.disabled = true;
+      button.textContent = "Opening installer…";
+      const result = await window.companion.installCodexCli();
+      onboarding = result.state;
+      window.alert(result.message);
+      renderControl();
+    }),
+  );
+  document.querySelectorAll<HTMLButtonElement>(".review-codex-hooks").forEach((button) =>
+    button.addEventListener("click", async () => {
+      button.disabled = true;
+      button.textContent = "Opening Codex…";
+      const result = await window.companion.reviewCodexHooks();
+      onboarding = result.state;
+      window.alert(result.message);
+      renderControl();
+    }),
+  );
+  document.querySelectorAll(".refresh-onboarding").forEach((button) =>
+    button.addEventListener("click", () => void refreshOnboarding()),
   );
   document.querySelector("#overlay-toggle")?.addEventListener("change", (event) => {
     void window.companion.setOverlayEnabled((event.target as HTMLInputElement).checked);
@@ -359,6 +410,10 @@ render();
 window.companion.onSnapshot((nextSnapshot) => {
   snapshot = nextSnapshot;
   render();
+});
+window.companion.onOnboarding((nextOnboarding) => {
+  onboarding = nextOnboarding;
+  if (surface === "control") renderControl();
 });
 
 if (surface === "control") {

@@ -43,6 +43,9 @@ try {
   const identified = registry.ingest({ provider: "claude", event: "SessionStart", sessionId: "later-id", cwd: root });
   assert.equal(identified.id, "claude:later-id");
   assert.equal(registry.snapshot().sessions.length, 1, "an identified hook must claim the matching unidentified session");
+  store.recordProviderActivity("claude", 4567);
+  const reloadedStore = new CompanionStore(root);
+  assert.equal(reloadedStore.providerActivity.claude, 4567, "verified provider activity must survive an app restart");
   console.log("Session launch binding smoke test passed.");
 } finally {
   rmSync(root, { recursive: true, force: true });
