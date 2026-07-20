@@ -14,6 +14,7 @@ import {
   net,
   protocol,
   screen,
+  shell,
   Tray,
 } from "electron";
 import type {
@@ -24,6 +25,7 @@ import type {
   SessionStatus,
   UpdateSessionInput,
 } from "../shared/types";
+import { CodexDesktopLauncher } from "./codex-desktop-launcher";
 import { startEventServer, type EventServerResult } from "./event-server";
 import { IntegrationManager } from "./integration-manager";
 import { OnboardingLauncher } from "./onboarding-launcher";
@@ -44,6 +46,7 @@ let store: CompanionStore;
 let registry: SessionRegistry;
 let integrationManager: IntegrationManager;
 let providerLauncher: ProviderLauncher;
+let codexDesktopLauncher: CodexDesktopLauncher;
 let onboardingLauncher: OnboardingLauncher;
 let eventServer: EventServerResult | null = null;
 let isQuitting = false;
@@ -246,14 +249,31 @@ const registerIpc = (): void => {
     const result = controlWindow ? await dialog.showOpenDialog(controlWindow, options) : await dialog.showOpenDialog(options);
     return result.canceled ? null : (result.filePaths[0] ?? null);
   });
-  ipcMain.handle("companion:launch-session", (_event, input: CreateSessionInput): LaunchSessionResult => {
+  ipcMain.handle("companion:launch-session", async (_event, input: CreateSessionInput): Promise<LaunchSessionResult> => {
     if (input.provider !== "claude" && input.provider !== "codex") {
       throw new Error("Automatic launch is available for Codex and Claude Code only.");
     }
     const displayId = String(screen.getPrimaryDisplay().id);
     const session = registry.create(input, displayId);
-    registry.update({ id: session.id, status: "starting", statusMessage: "Opening provider terminal…" });
+    registry.update({
+      id: session.id,
+      status: "starting",
+      statusMessage: input.provider === "codex" ? "Creating Codex Desktop thread…" : "Opening provider terminal…",
+    });
     try {
+      if (input.provider === "codex") {
+        try {
+          await shell.openExternal("codex://");
+          const desktop = await codexDesktopLauncher.createThread(input, session.id);
+          await shell.openExternal(desktop.deepLink);
+          registry.update({ id: session.id, status: "starting", statusMessage: "Opening in Codex Desktop…" });
+          const launchedSession = registry.snapshot().sessions.find((candidate) => candidate.id === session.id) ?? session;
+          return { launched: true, session: launchedSession };
+        } catch (desktopError) {
+          const detail = desktopError instanceof Error ? desktopError.message : "Codex Desktop launch failed";
+          registry.update({ id: session.id, status: "starting", statusMessage: `Desktop unavailable; opening terminal. ${detail}` });
+        }
+      }
       providerLauncher.launch(input, session.id);
       const launchedSession = registry.snapshot().sessions.find((candidate) => candidate.id === session.id) ?? session;
       return { launched: true, session: launchedSession };
@@ -303,6 +323,7 @@ app.whenReady().then(async () => {
   });
   integrationManager = new IntegrationManager(homedir(), app.getAppPath());
   providerLauncher = new ProviderLauncher(integrationManager, app.getAppPath(), homedir());
+  codexDesktopLauncher = new CodexDesktopLauncher(integrationManager, homedir(), app.getVersion());
   onboardingLauncher = new OnboardingLauncher(app.getAppPath(), homedir());
   eventServer = await startEventServer(store.settings.bridgePort, store.settings.bridgeToken, (event) => {
     const session = registry.ingest(event);

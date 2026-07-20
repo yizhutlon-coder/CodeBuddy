@@ -13,8 +13,9 @@ Creature Companion is a local Electron habitat for multiple Codex and Claude Cod
 - Claude Code hooks and exact status-line telemetry
 - Codex lifecycle hooks
 - One-click, backed-up provider hook setup
-- Interactive Codex or Claude Code terminal launch from the session quiz
-- Automatic binding between a launched terminal and its pending creature
+- Codex Desktop thread creation through the documented App Server, with terminal fallback
+- Interactive Claude Code terminal launch from the session quiz
+- Automatic binding between a launched provider session and its pending creature
 - Manual state controls and demo sessions for visual testing
 
 Ordinary ChatGPT conversations are intentionally marked experimental. The MVP does not inspect screenshots or scrape the ChatGPT interface.
@@ -38,6 +39,8 @@ On Windows, after the first install and build, you can also double-click `launch
 After the application starts, follow the **Guided setup** checklist for each provider. Creature Companion reports provider-app detection, standalone CLI availability, hook configuration, and verified live activity separately.
 
 For Codex, the wizard can open OpenAI's official standalone CLI installer when the CLI is missing. It then opens a dedicated terminal explaining the one unavoidable trust action: enter `/hooks` inside the Codex CLI and approve the Creature Companion commands. `/hooks` is not available in Codex Desktop chats. The app does not claim a live connection until an authenticated provider event actually arrives.
+
+After setup, **Create & launch** creates a named local Codex thread through `codex app-server` and opens that exact thread in Codex Desktop. The generated collaboration contract is stored as the thread's developer instructions. If the Desktop protocol or App Server is unavailable, Creature Companion falls back to its visible terminal launcher.
 
 For Claude Code, the wizard safely merges the lifecycle and status-line hooks, then waits for an event after Claude Code restarts. A timestamped backup is created before any provider configuration is replaced.
 

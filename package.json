@@ -8,7 +8,7 @@
     "dev": "concurrently -k \"vite --host 127.0.0.1\" \"tsc -p tsconfig.electron.json --watch --preserveWatchOutput\" \"wait-on tcp:5173 dist-electron/main/main.js && set VITE_DEV_SERVER_URL=http://127.0.0.1:5173&& electron .\"",
     "build": "tsc -p tsconfig.electron.json && vite build",
     "typecheck": "tsc -p tsconfig.electron.json --noEmit && tsc -p tsconfig.renderer.json --noEmit",
-    "test:onboarding": "node tests/integration-manager-smoke.cjs && node tests/session-binding-smoke.cjs",
+    "test:onboarding": "node tests/integration-manager-smoke.cjs && node tests/session-binding-smoke.cjs && node tests/codex-desktop-launcher-smoke.cjs",
     "test:control": "electron tests/control-smoke.cjs",
     "test:overlay": "electron tests/overlay-smoke.cjs",
     "test:terminal": "node tests/visible-terminal-smoke.cjs",
