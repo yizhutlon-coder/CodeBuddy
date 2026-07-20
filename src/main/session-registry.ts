@@ -64,6 +64,7 @@ export class SessionRegistry {
     bridge: BridgeInfo,
   ) {
     this.sessions = store.sessions;
+    if (this.collapseRapidClaudeDuplicates()) this.store.setSessions(this.sessions);
     this.bridge = bridge;
   }
 
@@ -133,6 +134,7 @@ export class SessionRegistry {
 
   ingest(event: IncomingEvent): CreatureSession {
     const raw = event.raw ?? {};
+    const eventName = event.event ?? String(raw.hook_event_name ?? raw.type ?? "event");
     const explicitSessionId =
       nonEmptyString(event.sessionId) ??
       nonEmptyString(raw.session_id) ??
@@ -142,7 +144,9 @@ export class SessionRegistry {
     const stableId = `${event.provider}:${sessionId}`;
     const now = Date.now();
     const eventCwd = nonEmptyString(event.cwd) ?? nonEmptyString(raw.cwd);
-    let session = this.sessions.find((candidate) => candidate.id === stableId);
+    let session = this.sessions.find(
+      (candidate) => candidate.id === stableId || candidate.sourceSessionIds?.includes(stableId),
+    );
     const placeholder = event.launchId
       ? this.sessions.find((candidate) => candidate.id === event.launchId && candidate.provider === event.provider)
       : undefined;
@@ -158,6 +162,20 @@ export class SessionRegistry {
       if (unidentified) {
         unidentified.id = stableId;
         session = unidentified;
+      }
+    }
+
+    if (!session && !placeholder && explicitSessionId && eventName.toLowerCase() === "sessionstart" && eventCwd) {
+      const rapidDuplicate = this.sessions.find(
+        (candidate) =>
+          candidate.provider === event.provider &&
+          candidate.cwd?.toLowerCase() === eventCwd.toLowerCase() &&
+          now - candidate.lastEventAt < 1_000 &&
+          (candidate.status === "starting" || candidate.status === "idle"),
+      );
+      if (rapidDuplicate) {
+        rapidDuplicate.sourceSessionIds = [...new Set([...(rapidDuplicate.sourceSessionIds ?? []), stableId])];
+        session = rapidDuplicate;
       }
     }
 
@@ -189,7 +207,6 @@ export class SessionRegistry {
       this.sessions.push(session);
     }
 
-    const eventName = event.event ?? String(raw.hook_event_name ?? raw.type ?? "event");
     session.status = event.status ?? statusFromHook(eventName, raw) ?? session.status;
     session.statusMessage = event.statusMessage ?? this.messageFor(eventName, session.status);
     session.title = event.title ?? session.title;
@@ -212,6 +229,38 @@ export class SessionRegistry {
       closed: "Session closed",
     };
     return messages[status];
+  }
+
+  private collapseRapidClaudeDuplicates(): boolean {
+    const ordered = [...this.sessions].sort((a, b) => a.createdAt - b.createdAt);
+    const removed = new Set<CreatureSession>();
+    for (let index = 0; index < ordered.length; index += 1) {
+      const canonical = ordered[index];
+      if (removed.has(canonical) || canonical.provider !== "claude" || !canonical.cwd) continue;
+      for (let candidateIndex = index + 1; candidateIndex < ordered.length; candidateIndex += 1) {
+        const candidate = ordered[candidateIndex];
+        if (candidate.createdAt - canonical.createdAt >= 1_000) break;
+        if (
+          removed.has(candidate) ||
+          candidate.provider !== "claude" ||
+          candidate.cwd?.toLowerCase() !== canonical.cwd.toLowerCase()
+        ) {
+          continue;
+        }
+        canonical.sourceSessionIds = [
+          ...new Set([...(canonical.sourceSessionIds ?? []), candidate.id, ...(candidate.sourceSessionIds ?? [])]),
+        ];
+        canonical.assets = { ...candidate.assets, ...canonical.assets };
+        canonical.profile ??= candidate.profile;
+        canonical.telemetry = candidate.telemetry ?? canonical.telemetry;
+        canonical.lastEventAt = Math.max(canonical.lastEventAt, candidate.lastEventAt);
+        canonical.updatedAt = Math.max(canonical.updatedAt, candidate.updatedAt);
+        removed.add(candidate);
+      }
+    }
+    if (!removed.size) return false;
+    this.sessions = this.sessions.filter((session) => !removed.has(session));
+    return true;
   }
 
   private commit(): void {

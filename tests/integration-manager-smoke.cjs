@@ -29,6 +29,8 @@ try {
   const installerScript = readFileSync(join(__dirname, "../scripts/install-codex-cli.ps1"), "utf8");
   const reviewScript = readFileSync(join(__dirname, "../scripts/review-codex-hooks.ps1"), "utf8");
   assert.match(installerScript, /https:\/\/chatgpt\.com\/codex\/install\.ps1/);
+  assert.match(installerScript, /Invoke-WebRequest/);
+  assert.doesNotMatch(installerScript, /Invoke-RestMethod/, "octet-stream installers must be downloaded as a file, not cast to text");
   assert.match(reviewScript, /\/hooks/);
   assert.doesNotMatch(reviewScript, /bypass-hook-trust/, "guided onboarding must preserve Codex's explicit trust review");
   assert.equal(manager.install("claude").ok, true);

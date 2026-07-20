@@ -35,6 +35,16 @@ try {
   assert.equal(connected.status, "idle");
 
   registry.remove(connected.id);
+  const doubleStartOne = registry.ingest({ provider: "claude", event: "SessionStart", sessionId: "claude-main", cwd: root });
+  const doubleStartTwo = registry.ingest({ provider: "claude", event: "SessionStart", sessionId: "claude-shadow", cwd: root });
+  assert.equal(doubleStartTwo.id, doubleStartOne.id, "rapid Claude double-start IDs must share one canonical creature");
+  assert.deepEqual(doubleStartTwo.sourceSessionIds, ["claude:claude-shadow"]);
+  const aliasUpdate = registry.ingest({ provider: "claude", event: "PreToolUse", sessionId: "claude-shadow", cwd: root });
+  assert.equal(aliasUpdate.id, doubleStartOne.id);
+  assert.equal(aliasUpdate.status, "working");
+  assert.equal(registry.snapshot().sessions.length, 1);
+
+  registry.remove(doubleStartOne.id);
   const unidentifiedOne = registry.ingest({ provider: "claude", event: "statusline", cwd: root, telemetry: { contextUsedPercent: 10 } });
   const unidentifiedTwo = registry.ingest({ provider: "claude", event: "statusline", cwd: root, telemetry: { contextUsedPercent: 11 } });
   assert.equal(unidentifiedOne.id, unidentifiedTwo.id, "repeated status-line renders without a session ID must be deduplicated");

@@ -41,6 +41,7 @@ export interface CreaturePosition {
 
 export interface CreatureSession {
   id: string;
+  sourceSessionIds?: string[];
   provider: Provider;
   title: string;
   status: SessionStatus;
