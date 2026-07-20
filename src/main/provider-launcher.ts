@@ -1,8 +1,8 @@
-import { spawn } from "node:child_process";
 import { existsSync, statSync } from "node:fs";
 import { join } from "node:path";
 import type { ConnectableProvider, CreateSessionInput } from "../shared/types";
 import { IntegrationManager } from "./integration-manager";
+import { launchVisiblePowerShell } from "./visible-powershell";
 
 export class ProviderLauncher {
   constructor(
@@ -25,25 +25,11 @@ export class ProviderLauncher {
     const scriptPath = join(this.appPath, "scripts", "launch-provider.ps1");
     if (!existsSync(scriptPath)) throw new Error(`Provider launch script not found at ${scriptPath}`);
 
-    const child = spawn(
-      "powershell.exe",
-      ["-NoExit", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", scriptPath, "-Provider", provider],
-      {
-        cwd,
-        detached: true,
-        windowsHide: false,
-        stdio: "ignore",
-        env: {
-          ...process.env,
-          CREATURE_COMPANION_PROVIDER_EXE: executable,
-          CREATURE_COMPANION_SESSION_TITLE: input.title.trim() || "Creature Companion session",
-          CREATURE_COMPANION_SESSION_CONTRACT: input.profile?.contract ?? "",
-          CREATURE_COMPANION_LAUNCH_ID: launchId,
-        },
-      },
-    );
-    if (!child.pid) throw new Error("The provider terminal could not be started.");
-    child.unref();
-    return child.pid;
+    return launchVisiblePowerShell(scriptPath, cwd, ["-Provider", provider], {
+      CREATURE_COMPANION_PROVIDER_EXE: executable,
+      CREATURE_COMPANION_SESSION_TITLE: input.title.trim() || "Creature Companion session",
+      CREATURE_COMPANION_SESSION_CONTRACT: input.profile?.contract ?? "",
+      CREATURE_COMPANION_LAUNCH_ID: launchId,
+    });
   }
 }
