@@ -33,6 +33,16 @@ try {
   assert.deepEqual(connected.profile, profile);
   assert.equal(connected.position.displayId, "display-1");
   assert.equal(connected.status, "idle");
+
+  registry.remove(connected.id);
+  const unidentifiedOne = registry.ingest({ provider: "claude", event: "statusline", cwd: root, telemetry: { contextUsedPercent: 10 } });
+  const unidentifiedTwo = registry.ingest({ provider: "claude", event: "statusline", cwd: root, telemetry: { contextUsedPercent: 11 } });
+  assert.equal(unidentifiedOne.id, unidentifiedTwo.id, "repeated status-line renders without a session ID must be deduplicated");
+  assert.equal(registry.snapshot().sessions.length, 1);
+
+  const identified = registry.ingest({ provider: "claude", event: "SessionStart", sessionId: "later-id", cwd: root });
+  assert.equal(identified.id, "claude:later-id");
+  assert.equal(registry.snapshot().sessions.length, 1, "an identified hook must claim the matching unidentified session");
   console.log("Session launch binding smoke test passed.");
 } finally {
   rmSync(root, { recursive: true, force: true });

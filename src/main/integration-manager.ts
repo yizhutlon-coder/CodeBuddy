@@ -67,10 +67,19 @@ export class IntegrationManager {
       timeout: 4_000,
     });
     if (result.status !== 0) return undefined;
-    return result.stdout
+    const candidates = result.stdout
       .split(/\r?\n/)
       .map((line) => line.trim())
-      .find(Boolean);
+      .filter(Boolean);
+    return candidates.find((candidate) => {
+      const probe = spawnSync(candidate, ["--version"], {
+        encoding: "utf8",
+        windowsHide: true,
+        env: { ...process.env, PATH: this.pathValue },
+        timeout: 4_000,
+      });
+      return !probe.error && probe.status === 0;
+    });
   }
 
   install(provider: ConnectableProvider): IntegrationResult {
@@ -145,7 +154,7 @@ export class IntegrationManager {
 
     const backupPath = this.writeJsonWithBackup(this.claudeConfigPath, config);
     return {
-      message: `Claude Code hooks installed. Restart Claude Code and approve the local commands when prompted.${telemetryNote}`,
+      message: `Claude Code hooks configured. Restart Claude Code so new sessions load them.${telemetryNote}`,
       backupPath,
     };
   }
@@ -159,7 +168,7 @@ export class IntegrationManager {
     config.hooks = hooks;
     const backupPath = this.writeJsonWithBackup(this.codexConfigPath, config);
     return {
-      message: "Codex hooks installed. Restart Codex, open /hooks, and trust the new Creature Companion commands.",
+      message: "Codex hooks configured. Start a new Codex task, open /hooks, and trust the Creature Companion commands before they can run.",
       backupPath,
     };
   }

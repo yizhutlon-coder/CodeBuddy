@@ -37,6 +37,8 @@ On Windows, after the first install and build, you can also double-click `launch
 
 After the application starts, use **Set up automatically** for Codex or Claude Code. Creature Companion detects each CLI, preserves existing settings and hooks, creates a timestamped configuration backup, and shows the remaining provider trust step. Then choose **Launch a session**, select a working folder, and the app opens an interactive provider terminal that is already paired with its creature.
 
+Hook configuration and automatic terminal launch are reported separately. A provider can connect sessions through hooks even when its interactive CLI is not on `PATH`; in that case, open the session in the provider normally. Codex requires a new task plus explicit trust through `/hooks` before newly configured hooks run.
+
 See [INTEGRATIONS.md](./INTEGRATIONS.md) for manual setup and troubleshooting.
 
 ## Security model

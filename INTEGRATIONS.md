@@ -20,6 +20,8 @@ In the Creature Companion control panel, find **Quick setup** and click **Set up
 
 After setup, click **Launch a session**, choose a project folder, complete the short collaboration profile, and use **Create & launch**. The new terminal inherits a private launch ID so its first provider event binds to the pending creature automatically.
 
+The control panel reports hook configuration separately from CLI availability. If the hooks are configured but **Launch a session** is disabled, open the provider normally; its lifecycle events can still create and update a creature. For Codex, start a new task after setup and use `/hooks` to trust the new commands. Codex deliberately skips untrusted hooks.
+
 If a configuration file contains invalid JSON, automatic setup stops without changing it. Fix the JSON or use the manual instructions below.
 
 ## Test the bridge

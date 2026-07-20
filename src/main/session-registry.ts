@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import type {
   AppSnapshot,
   BridgeInfo,
@@ -40,6 +40,18 @@ const titleFor = (event: IncomingEvent, sessionId: string): string => {
     return parts.at(-1) ?? `${event.provider} session`;
   }
   return `${event.provider === "claude" ? "Claude Code" : "Codex"} · ${sessionId.slice(0, 7)}`;
+};
+
+const nonEmptyString = (value: unknown): string | undefined => {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  return trimmed || undefined;
+};
+
+const fallbackSessionId = (event: IncomingEvent, raw: Record<string, unknown>): string => {
+  const cwd = nonEmptyString(event.cwd) ?? nonEmptyString(raw.cwd);
+  const identity = event.launchId ?? cwd?.toLowerCase() ?? event.title ?? "unknown-session";
+  return `unidentified-${createHash("sha256").update(`${event.provider}:${identity}`).digest("hex").slice(0, 16)}`;
 };
 
 export class SessionRegistry {
@@ -121,13 +133,33 @@ export class SessionRegistry {
 
   ingest(event: IncomingEvent): CreatureSession {
     const raw = event.raw ?? {};
-    const sessionId = event.sessionId ?? String(raw.session_id ?? raw.thread_id ?? raw.threadId ?? randomUUID());
+    const explicitSessionId =
+      nonEmptyString(event.sessionId) ??
+      nonEmptyString(raw.session_id) ??
+      nonEmptyString(raw.thread_id) ??
+      nonEmptyString(raw.threadId);
+    const sessionId = explicitSessionId ?? fallbackSessionId(event, raw);
     const stableId = `${event.provider}:${sessionId}`;
     const now = Date.now();
+    const eventCwd = nonEmptyString(event.cwd) ?? nonEmptyString(raw.cwd);
     let session = this.sessions.find((candidate) => candidate.id === stableId);
     const placeholder = event.launchId
       ? this.sessions.find((candidate) => candidate.id === event.launchId && candidate.provider === event.provider)
       : undefined;
+
+    if (!session && explicitSessionId) {
+      const unidentified = this.sessions.find(
+        (candidate) =>
+          candidate.provider === event.provider &&
+          candidate.id.startsWith(`${event.provider}:unidentified-`) &&
+          ((eventCwd && candidate.cwd?.toLowerCase() === eventCwd.toLowerCase()) ||
+            (!eventCwd && now - candidate.lastEventAt < 60_000)),
+      );
+      if (unidentified) {
+        unidentified.id = stableId;
+        session = unidentified;
+      }
+    }
 
     if (!session && placeholder) {
       placeholder.id = stableId;
@@ -147,7 +179,7 @@ export class SessionRegistry {
         title: titleFor(event, sessionId),
         status: "starting",
         statusMessage: "Session connected",
-        cwd: event.cwd ?? (typeof raw.cwd === "string" ? raw.cwd : undefined),
+        cwd: eventCwd,
         createdAt: now,
         updatedAt: now,
         lastEventAt: now,
@@ -161,7 +193,7 @@ export class SessionRegistry {
     session.status = event.status ?? statusFromHook(eventName, raw) ?? session.status;
     session.statusMessage = event.statusMessage ?? this.messageFor(eventName, session.status);
     session.title = event.title ?? session.title;
-    session.cwd = event.cwd ?? session.cwd;
+    session.cwd = eventCwd ?? session.cwd;
     session.telemetry = event.telemetry ? { ...session.telemetry, ...event.telemetry, updatedAt: now } : session.telemetry;
     session.lastEventAt = now;
     session.updatedAt = now;

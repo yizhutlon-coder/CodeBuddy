@@ -41,22 +41,28 @@ const providerLabels: Record<Provider, string> = {
 const setupHtml = (): string => {
   const cards = onboarding.providers
     .map((setup) => {
-      const ready = setup.installed && setup.configured;
-      const status = ready ? "Ready" : setup.installed ? "Setup needed" : "CLI not found";
-      return `<article class="provider-setup-card ${ready ? "ready" : "needs-setup"}">
-        <div class="provider-setup-heading"><div><span class="provider ${setup.provider}">${escapeHtml(setup.displayName)}</span><h3>${status}</h3></div><span class="setup-state ${ready ? "connected" : "pending"}">${ready ? "Connected" : "Not connected"}</span></div>
-        <p>${setup.installed ? `Found at <code>${escapeHtml(setup.executablePath ?? "")}</code>` : `Install ${escapeHtml(setup.displayName)} and restart Creature Companion so it appears on PATH.`}</p>
+      const configured = setup.configured;
+      const status = configured ? "Hooks configured" : "Setup needed";
+      const availability = setup.installed
+        ? `Interactive CLI found at <code>${escapeHtml(setup.executablePath ?? "")}</code>`
+        : `Automatic terminal launch is unavailable because the interactive CLI is not on PATH. Sessions opened elsewhere can still connect through the configured hooks.`;
+      const trustNote = setup.provider === "codex"
+        ? "Start a new Codex task, open /hooks, and trust the Creature Companion commands. Codex skips new hooks until they are trusted."
+        : "Restart Claude Code after configuration so new sessions load the hooks.";
+      return `<article class="provider-setup-card ${configured ? "ready" : "needs-setup"}">
+        <div class="provider-setup-heading"><div><span class="provider ${setup.provider}">${escapeHtml(setup.displayName)}</span><h3>${status}</h3></div><span class="setup-state ${configured ? "connected" : "pending"}">${configured ? "Configured" : "Not configured"}</span></div>
+        <p>${availability}</p>
         <p class="config-path">Configuration: ${escapeHtml(setup.configPath)}</p>
         ${setup.warning ? `<p class="setup-warning">${escapeHtml(setup.warning)}</p>` : ""}
-        ${setup.configured && setup.requiresTrust ? `<p class="trust-note">On first use, approve or trust the local Creature Companion hook commands in ${escapeHtml(setup.displayName)}.</p>` : ""}
+        ${setup.configured ? `<p class="trust-note">${trustNote}</p>` : ""}
         <div class="setup-actions">
           <button class="subtle install-provider" data-provider="${setup.provider}">${setup.configured ? "Repair setup" : "Set up automatically"}</button>
-          <button class="primary launch-provider" data-provider="${setup.provider}" ${ready ? "" : "disabled"}>Launch a session</button>
+          <button class="primary launch-provider" data-provider="${setup.provider}" ${setup.installed && setup.configured ? "" : "disabled"}>Launch a session</button>
         </div>
       </article>`;
     })
     .join("");
-  const readyCount = onboarding.providers.filter((provider) => provider.installed && provider.configured).length;
+  const readyCount = onboarding.providers.filter((provider) => provider.configured).length;
   return `<section class="setup-panel">
     <div class="setup-intro"><div><span class="eyebrow">Quick setup</span><h2>Connect your coding agents</h2><p>Creature Companion can add its local hooks without replacing your existing configuration. A timestamped backup is made before every change.</p></div><strong>${readyCount} / ${onboarding.providers.length} ready</strong></div>
     <div class="setup-grid">${cards}</div>
@@ -354,3 +360,10 @@ window.companion.onSnapshot((nextSnapshot) => {
   snapshot = nextSnapshot;
   render();
 });
+
+if (surface === "control") {
+  window.addEventListener("focus", async () => {
+    onboarding = await window.companion.getOnboarding();
+    render();
+  });
+}
