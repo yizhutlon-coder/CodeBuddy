@@ -2,6 +2,8 @@
 
 Creature Companion is a local Electron habitat for multiple Codex and Claude Code sessions. Every session gets its own draggable creature, state, animation, role profile, context meter, and rate-limit display when the provider exposes that data.
 
+The researched feature, permissions, hooks, security, and release roadmap is in [IMPLEMENTATION_PLAN.md](./IMPLEMENTATION_PLAN.md).
+
 ## Current MVP
 
 - Transparent, always-on-top overlay on every display
@@ -13,7 +15,7 @@ Creature Companion is a local Electron habitat for multiple Codex and Claude Cod
 - Claude Code hooks and exact status-line telemetry
 - Codex lifecycle hooks
 - One-click, backed-up provider hook setup
-- Codex Desktop thread creation through the documented App Server, with terminal fallback
+- Codex thread creation through the documented App Server, followed by an installed Desktop protocol compatibility route with terminal fallback
 - Interactive Claude Code terminal launch from the session quiz
 - Automatic binding between a launched provider session and its pending creature
 - Manual state controls and demo sessions for visual testing
